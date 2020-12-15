@@ -1,7 +1,8 @@
 cc = {}
 
-carrierName = "boatymcboatface"
-windDirection = 0
+cc.carrierName = "boatymcboatface"
+cc.windDirection = 0
+cc.intoWindDistance = 2000 -- Distance from carrier to new wp into wind in meters
 
 function cc.getWind(vec3)
     local vec3mod = {}
@@ -10,28 +11,33 @@ function cc.getWind(vec3)
     local windVec3 = {}
     windVec3 = atmosphere.getWind(vec3mod)
 
-    cc.notify (tostring (vec3mod.x), 5)
-    cc.notify (tostring (vec3mod.y), 5)
-    cc.notify (tostring (vec3mod.z), 5)
+    --cc.notify (tostring (vec3mod.x), 5)
+    --cc.notify (tostring (vec3mod.y), 5)
+    --cc.notify (tostring (vec3mod.z), 5)
     
-    cc.notify ("wind x: " .. windVec3.x, 5)
-    cc.notify ("wind y: " .. windVec3.y, 5)
-    cc.notify ("wind z: " .. windVec3.z, 5)
+    --cc.notify ("wind x: " .. windVec3.x, 5)
+    --cc.notify ("wind y: " .. windVec3.y, 5)
+    --cc.notify ("wind z: " .. windVec3.z, 5)
+
+    --cc.notify("Wind speed: "..mist.vec.mag(windVec3), 5)
     return windVec3
 end
 
 function cc.turnIntoWind(groupName)
     local groupVec3 = Group.getByName(groupName):getUnit(1):getPoint()
     local windVec3 = cc.getWind(groupVec3)
-    local _angleR = cc.getAngle (windVec3, groupVec3)
-    local _offset = cc.rotateOffset(_angleR, 1000)
-    local _intoWindVec3 = mist.utils.makeVec3GL ( mist.vec.add (groupVec3, _offset) )
+    local windmag = mist.vec.mag(windVec3)
+
+    local _intoWindVec3 = mist.utils.makeVec3GL ( 
+        mist.vec.add( groupVec3, mist.vec.scalar_mult(windVec3, cc.intoWindDistance / windmag )  )
+     )
+    
     cc.flareVec3 = _intoWindVec3
     cc.flareVec3 = groupVec3
     cc.smokeVec3 = groupVec3
     cc.smokeVec3 = _intoWindVec3
-
-    --cc.moveToVec3(groupName, _intoWindVec3)
+    
+    cc.moveToVec3(groupName, _intoWindVec3)
 end
 
 function cc.moveToVec3(groupName, vec3)
@@ -43,7 +49,7 @@ function cc.moveToVec3(groupName, vec3)
 	
 	mist.goRoute(groupName, path)
 
-	debugNotify("moveToVec3onRoad func finished")
+	cc.notify("moveToVec3onRoad func finished", 5)
 end
 
 function cc.notify(message, displayFor)
@@ -80,10 +86,10 @@ function cc.flareVec3 (vec3)
 end
 
 do
-    --windDirection = cc.getWind(Group.getByName(carrierName):getUnit(1):getPoint())
+    --windDirection = cc.getWind(Group.getByName(cc.carrierName):getUnit(1):getPoint())
     --windDirection = cc.getWind(mist.utils.makeVec3GL (mist.utils.zoneToVec3("zone-1")))
 
-    cc.turnIntoWind(carrierName)
+    cc.turnIntoWind(cc.carrierName)
 
 
 
