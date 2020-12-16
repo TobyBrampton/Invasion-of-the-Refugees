@@ -2,7 +2,9 @@ cc = {}
 
 cc.carrierName = "boatymcboatface"
 cc.windDirection = 0
-cc.intoWindDistance = 2000 -- Distance from carrier to new wp into wind in meters
+cc.intoWindDistance = 30000 -- Distance from carrier to new wp into wind in meters
+cc.velOverDeck = 15         -- Desired wind velocity over deck in m/s
+cc.velCruise = 15           -- normal cruise speed when not lined up with wind in m/s
 
 function cc.getWind(vec3)
     local vec3mod = {}
@@ -11,68 +13,58 @@ function cc.getWind(vec3)
     local windVec3 = {}
     windVec3 = atmosphere.getWind(vec3mod)
 
-    --cc.notify (tostring (vec3mod.x), 5)
-    --cc.notify (tostring (vec3mod.y), 5)
-    --cc.notify (tostring (vec3mod.z), 5)
-    
-    --cc.notify ("wind x: " .. windVec3.x, 5)
-    --cc.notify ("wind y: " .. windVec3.y, 5)
-    --cc.notify ("wind z: " .. windVec3.z, 5)
-
-    --cc.notify("Wind speed: "..mist.vec.mag(windVec3), 5)
     return windVec3
 end
 
 function cc.turnIntoWind(groupName)
     local groupVec3 = Group.getByName(groupName):getUnit(1):getPoint()
     local windVec3 = cc.getWind(groupVec3)
-    local windmag = mist.vec.mag(windVec3)
+    local windMag = mist.vec.mag(windVec3)
+    local downWindVec2 = mist.vec.rotateVec2(mist.utils.makeVec2(windVec3), math.pi )
+    local downWindVec3 = mist.utils.makeVec3GL(downWindVec2)
 
     local _intoWindVec3 = mist.utils.makeVec3GL ( 
-        mist.vec.add( groupVec3, mist.vec.scalar_mult(windVec3, cc.intoWindDistance / windmag )  )
-     )
+        mist.vec.add( groupVec3, mist.vec.scalar_mult(downWindVec3, cc.intoWindDistance / windMag )  )
+    )
+
+    --TODO: check if on land
+
+    --cc.smokeVec3(_intoWindVec3)
+    cc.smokeVec3(groupVec3)
+
     
-    cc.flareVec3 = _intoWindVec3
-    cc.flareVec3 = groupVec3
-    cc.smokeVec3 = groupVec3
-    cc.smokeVec3 = _intoWindVec3
-    
-    cc.moveToVec3(groupName, _intoWindVec3)
+    cc.moveToVec3(groupName, _intoWindVec3, windMag)
 end
 
-function cc.moveToVec3(groupName, vec3)
-	local _groupVec3  = Group.getByName(groupName):getUnit(1):getPosition()
-	local _vec3GL = mist.utils.makeVec3GL(vec3)
-	local path = {}
-	path[#path + 1] = mist.ground.buildWP (_groupVec3)
-	path[#path + 1] = mist.ground.buildWP (_vec3GL)
-	
-	mist.goRoute(groupName, path)
+function cc.moveToVec3(groupName, vec3, windMag)
+    local _groupVec3 = Group.getByName(groupName):getUnit(1):getPoint()
+    local _vec3GL = mist.utils.makeVec3GL(vec3)
+    local _vel = cc.velOverDeck + windMag            -- Set velocity so speed over deck is desired val.
+    
+    cc.smokeVec3(_groupVec3)
+    cc.smokeVec3(_vec3GL)
+    
+    local path = {}
+	path[#path + 1] = mist.ground.buildWP (_groupVec3, nil, 5)
+    path[#path + 1] = mist.ground.buildWP (_vec3GL, nil, 7)
+    path[#path + 1] = mist.ground.buildWP (_groupVec3, nil, 10 )
+    
+    mist.goRoute(groupName, path)
 
-	cc.notify("moveToVec3onRoad func finished", 5)
+    -- Notify player about carrier:
+    local _duration = math.floor(( cc.intoWindDistance / _vel ) / 60 ) 
+    cc.notify("Carrier steering into the wind for ".._duration.." minutes", 10)
+    
+    timer.scheduleFunction(cc.patrol, {}, timer.getTime() + _duration * 60)
+end
+
+function cc.patrol()
+    mist.ground.patrol(cc.carrierName, 'doubleBack')
+    cc.notify("The Carrier is returning to it's patrol route.", 10)
 end
 
 function cc.notify(message, displayFor)
     trigger.action.outText(message, displayFor)
-end
-
-function cc.rotateOffset ( radian, offset ) --input degree and radius, rotates the vector and returns a vec3 offset
-    local _offset = {
-        x = offset,
-        y = 0
-    }
-    local _offset = mist.utils.makeVec3( mist.vec.rotateVec2 ( _offset, radian ) )
-    return _offset
-end
-
-function cc.getAngle (vec3From, vec3To)
-    local _angleR = math.atan2 (vec3To.z - vec3From.z, vec3To.x - vec3From.x)-- - math.atan2 (vec3To.z, vec3To.x)
-    if _angleR < 0 then
-        _angleR = _angleR + 2 * math.pi
-    end
-    local _angleD = math.deg (_angleR)
-    cc.notify("Angle(r): " .. _angleR .. "; angle(d): " .. _angleD, 5)
-    return _angleR
 end
 
 function cc.smokeVec3 (vec3)
@@ -80,18 +72,9 @@ function cc.smokeVec3 (vec3)
     trigger.action.smoke(_vec3GL,3)
 end
 
-function cc.flareVec3 (vec3)
-    local _vec3GL = mist.utils.makeVec3GL(vec3)
-    trigger.action.illuminationBomb(_vec3GL, 1000000)
-end
-
 do
-    --windDirection = cc.getWind(Group.getByName(cc.carrierName):getUnit(1):getPoint())
-    --windDirection = cc.getWind(mist.utils.makeVec3GL (mist.utils.zoneToVec3("zone-1")))
+    cc.radioSubMenu = missionCommands.addSubMenu ("Carrier Commands")
+    cc.radioTurnIntoWind = missionCommands.addCommand ("Steer carrier into wind", cc.radioSubMenu, cc.turnIntoWind, cc.carrierName)
 
-    cc.turnIntoWind(cc.carrierName)
-
-
-
-    cc.notify ("carrierCourse loaded", 15)
+    cc.notify ("carrierCourse init complete", 5)
 end
